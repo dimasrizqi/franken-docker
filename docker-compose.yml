@@ -1,47 +1,55 @@
-version: '3.9'
-
 services:
-  frankenphp:
-    image: dunglas/frankenphp:latest
-    container_name: frankenphp
+  app:
+    build:
+      context: .
+      dockerfile: docker/franken.Dockerfile
+    working_dir: /app
     volumes:
-      - ./app:/var/www/html
-    ports:
-      - "8080:80"
-    depends_on:
-      mysql:
-        condition: service_healthy
-
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
+      - .:/app
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: frankenphp_db
-      MYSQL_USER: frankenphp_user
-      MYSQL_PASSWORD: userpassword
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_DATABASE=silentdb
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=xcWI3128
+      - QUEUE_CONNECTION=rabbitmq
+    depends_on:
+      - rabbitmq
+      - redis
     ports:
-      - "3306:3306"
+      - 8090:80
+    command: ["frankenphp", "-c", "/etc/frankenphp.yaml"]
+
+  rabbitmq:
+    image: rabbitmq:4.0.4-management
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+  minio:
+    image: quay.io/minio/minio:latest
+    ports:
+      - "127.0.0.1:9003:9000"
+      - "127.0.0.1:9004:9001"
+    environment:
+      MINIO_ROOT_USER: root
+      MINIO_ROOT_PASSWORD: rootroot
     volumes:
-      - mysql_data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: phpmyadmin
-    environment:
-      PMA_HOST: mysql
-      PMA_USER: frankenphp_user
-      PMA_PASSWORD: userpassword
-    ports:
-      - "8081:80"
-    depends_on:
-      mysql:
-        condition: service_healthy
-
+      - minio_data:/data
+    command: server /data --console-address ":9001"
 volumes:
-  mysql_data:
+  db_data:
+    driver: local
+  media:
+  minio_data:
+    driver: local
